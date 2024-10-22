@@ -1,0 +1,68 @@
+#!/bin/bash
+
+set -xe
+
+if [ -z "$1" ]; then
+  echo "error: need a install dir in first argument" >&2
+  exit 1
+fi
+
+if [ -z "$2" ]; then
+  echo "error: need a marker file path in first argument" >&2
+  exit 1
+fi
+
+install_dir=$(realpath $1)
+output=$(realpath $2)
+image_name=$3
+base_image=${4:-osrf/ros:jazzy-desktop}
+
+if [ ! -d $install_dir ]; then
+  echo "error: $1 is not a valid directory" >&2
+  exit 1
+fi
+
+if [ -z "$3" ]; then
+  echo "error: need a image name" >&2
+  exit 1
+fi
+
+docker_basedir=$(mktemp -d)
+
+cleanup() {
+  rm -rf $docker_basedir
+}
+
+trap cleanup EXIT
+
+cd $docker_basedir
+
+cp -ar $install_dir install
+
+cat >ros-activate.sh <<EOF
+if [ -f /opt/ros/\$ROS_DISTRO/setup.bash ]; then
+  source /opt/ros/\$ROS_DISTRO/setup.bash;
+fi
+
+if [ -f /opt/junk/install/setup.bash ]; then
+  source /opt/junk/install/setup.bash;
+fi
+EOF
+
+cat >Dockerfile <<EOF
+FROM ${base_image}
+
+COPY ros-activate.sh /etc/profile.d/ros-activate.sh
+COPY install /opt/junk/install
+
+RUN set -xe; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get update; \
+    rosdep update; \
+    bash -c 'while IFS= read -r -d "" file; do echo "Processing: \$file"; rosdep install --from-paths \$(dirname \$file) --ignore-src -r -y; done < <(find /opt/junk/install -type f -name "package.xml" -print0);' \
+    rm -rf /var/lib/apt/lists/*;
+EOF
+
+docker build -t $image_name .
+
+touch $output
