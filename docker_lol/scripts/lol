@@ -12,6 +12,11 @@ if [ -z "$2" ]; then
   exit 1
 fi
 
+if [ -z "$3" ]; then
+  echo "error: need a image name" >&2
+  exit 1
+fi
+
 install_dir=$(realpath $1)
 output=$(realpath $2)
 image_name=$3
@@ -19,11 +24,6 @@ base_image=${4:-osrf/ros:jazzy-desktop}
 
 if [ ! -d $install_dir ]; then
   echo "error: $1 is not a valid directory" >&2
-  exit 1
-fi
-
-if [ -z "$3" ]; then
-  echo "error: need a image name" >&2
   exit 1
 fi
 
